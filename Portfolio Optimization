@@ -2,138 +2,161 @@ import pandas as pd
 import os
 import numpy as np
 from xgboost import XGBRegressor
+import matplotlib.pyplot as plt
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
 from scipy.optimize import minimize
 
-# Define the ticker symbols for the index funds and bond types
+
+# Define the ticker symbols
 index_funds = ['SPY', 'DIA', 'QQQ', 'IWM', 'URTH', 'EEM']
 bond_types = ['BIL', 'SHY', 'IEF', 'TLT', 'MUB']
 additional_bonds = ['LQD', 'HYG', 'BNDX']
-
-# Combine all tickers into one list
 all_tickers = index_funds + bond_types + additional_bonds
 
-# Create a dictionary to map tickers to their full names
-ticker_to_name = {
-    'SPY': 'S&P 500 ETF',
-    'DIA': 'Dow Jones Industrial Average ETF',
-    'QQQ': 'NASDAQ 100 ETF',
-    'IWM': 'Russell 2000 ETF',
-    'URTH': 'MSCI World ETF',
-    'EEM': 'MSCI Emerging Markets ETF',
-    'BIL': 'SPDR Bloomberg Barclays 1-3 Month T-Bill ETF',
-    'SHY': 'iShares 1-3 Year Treasury Bond ETF',
-    'IEF': 'iShares 7-10 Year Treasury Bond ETF',
-    'TLT': 'iShares 20+ Year Treasury Bond ETF',
-    'MUB': 'iShares National Muni Bond ETF',
-    'LQD': 'iShares iBoxx $ Investment Grade Corporate Bond ETF',
-    'HYG': 'iShares iBoxx $ High Yield Corporate Bond ETF',
-    'BNDX': 'Vanguard Total International Bond ETF'
-}
 
 # Define the maximum allowed risk
-max_risk = 0.05  # You can adjust this value as needed
-max_investment = 1 #You can adjust this value as needed, this is maximum percentage you want to invest in a stock
+max_risk = 3 # Adjust this value in terms of percentages
+max_investment = 0.5 #Adjust this value as a decimal
 
-# Create a DataFrame to store predicted metrics
-predicted_metrics_df = pd.DataFrame()
 
-# Read and process the data
+# Initialize DataFrame to store annual metrics
+annual_metrics_df = pd.DataFrame()
+
+# Process data for each ticker
 for ticker in all_tickers:
     csv_file = f"{ticker}.csv"
-
     if not os.path.exists(csv_file):
         print(f"CSV file for {ticker} not found. Skipping.")
         continue
 
-    data = pd.read_csv(csv_file)
-    data['Daily Return'] = data['Adj Close'].pct_change()
+    data = pd.read_csv(csv_file, parse_dates=['Date'], index_col='Date')
+    data['Actual Daily Return'] = data['Adj Close'].pct_change()
 
-    # Calculate lagged features
-    for i in range(1, 6):  # Creating 5 lagged features
-        data[f'Lagged_Return_{i}'] = data['Daily Return'].shift(i) #Understand this 
+    # Calculate annual return and risk
+    annual_return = (1 + data['Actual Daily Return']).resample('Y').prod() - 1
+    annual_risk = data['Actual Daily Return'].resample('Y').std() * np.sqrt(252)
 
-    # Calculate rolling standard deviation for y_risk
-    y_risk = data['Daily Return'].rolling(window=5).std()
+    # Store in DataFrame
+    annual_metrics_df[f'{ticker}_Annual Return'] = annual_return
+    annual_metrics_df[f'{ticker}_Annual Risk'] = annual_risk
 
-    # Drop NaN values from y_risk, X, and y_return to align their lengths
-    y_risk.dropna(inplace=True)
-    data.dropna(inplace=True)  # This will drop NaN in 'Daily Return' and lagged features
+# Drop rows with NaN values
+annual_metrics_df.dropna(inplace=True)
 
-    # Features and Labels
-    X = data[['Lagged_Return_1', 'Lagged_Return_2', 'Lagged_Return_3', 'Lagged_Return_4', 'Lagged_Return_5']]
-    y_return = data['Daily Return'] #UNDERSTAND THIS
+# Normalize the data
+scaler = MinMaxScaler()
+X_normalized = scaler.fit_transform(annual_metrics_df)
+X_normalized = pd.DataFrame(X_normalized, columns=annual_metrics_df.columns)
 
-    # Time Series Cross-Validation
-    tscv = TimeSeriesSplit(n_splits=5)
+# Time Series Cross-Validation
+tscv = TimeSeriesSplit(n_splits=5)
+
+# Initialize DataFrames for storing predicted metrics
+predicted_returns_df = pd.DataFrame()
+predicted_risk_df = pd.DataFrame()
+
+# Model Training and Prediction
+for ticker in all_tickers:
+    # Prepare data for the ticker
+    X = X_normalized[[f'{ticker}_Annual Return', f'{ticker}_Annual Risk']]
+    y_return = annual_metrics_df[f'{ticker}_Annual Return']
+    y_risk = annual_metrics_df[f'{ticker}_Annual Risk']
+
+    # Check if X, y_return, y_risk are not empty
+    if X.empty or y_return.empty or y_risk.empty:
+        print(f"Data for {ticker} is empty. Skipping.")
+        continue
 
     # Model for Returns
     model_return = XGBRegressor(objective='reg:squarederror')
-    mse_accumulator_return = []  # Initialize an empty list to store MSEs
-    for train_index, test_index in tscv.split(X):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y_return.iloc[train_index], y_return.iloc[test_index]
-        model_return.fit(X_train, y_train)
-        y_pred = model_return.predict(X_test)
-        mse = mean_squared_error(y_test, y_pred)
-        mse_accumulator_return.append(mse)  # Append the MSE to the accumulator
-
-    # Calculate the average MSE and print it
-    average_mse_return = sum(mse_accumulator_return) / len(mse_accumulator_return)
-    print(f"Average Mean Squared Error for Returns {ticker}: {average_mse_return}")
+    model_return.fit(X, y_return)
+    future_return = model_return.predict(X.tail(1))
 
     # Model for Risk
     model_risk = XGBRegressor(objective='reg:squarederror')
-    mse_accumulator_risk = []  # Initialize an empty list to store MSEs for risk
-    for train_index, test_index in tscv.split(X):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y_risk.iloc[train_index], y_risk.iloc[test_index]
-        model_risk.fit(X_train, y_train)
-        y_pred = model_risk.predict(X_test)
-        mse = mean_squared_error(y_test, y_pred)
-        mse_accumulator_risk.append(mse)  # Append the MSE to the accumulator
-
-    # Calculate the average MSE for risk and print it
-    average_mse_risk = sum(mse_accumulator_risk) / len(mse_accumulator_risk)
-    print(f"Average Mean Squared Error for Risk {ticker}: {average_mse_risk}")
-
-
-    # Predict future returns and risk for the ticker
-    future_return = model_return.predict(X.tail(1))
+    model_risk.fit(X, y_risk)
     future_risk = model_risk.predict(X.tail(1))
 
-    # Store predicted metrics in the DataFrame
-    predicted_metrics_df.loc[ticker, 'Annualized Return (%)'] = future_return[0]
-    predicted_metrics_df.loc[ticker, 'Risk (%)'] = future_risk[0]
+    # Store predicted metrics
+    predicted_returns_df.loc[ticker, 'Predicted Annual Return'] = future_return[0]
+    predicted_risk_df.loc[ticker, 'Predicted Risk'] = future_risk[0]
 
-# Define the objective function to maximize the Sharpe ratio
+# Visualize Predictions
+fig, axs = plt.subplots(2, 1, figsize=(15, 12))
+bar_width = 0.35  # Width of the bars
+opacity = 0.8  # Opacity of the bars
+
+# Indices for the tickers
+index = np.arange(len(all_tickers))
+
+# Plot for Returns
+for i, ticker in enumerate(all_tickers):
+    axs[0].bar(index[i] - bar_width/2, annual_metrics_df[f'{ticker}_Annual Return'].mean(), bar_width, alpha=opacity, color='blue', label='Actual Return' if i == 0 else "")
+    axs[0].bar(index[i] + bar_width/2, predicted_returns_df.loc[ticker, 'Predicted Annual Return'], bar_width, alpha=opacity, color='orange', label='Predicted Return' if i == 0 else "")
+axs[0].set_title('Actual vs Predicted Annual Return')
+axs[0].set_xticks(index)
+axs[0].set_xticklabels(all_tickers)
+axs[0].legend()
+
+# Plot for Risk
+for i, ticker in enumerate(all_tickers):
+    # Print actual vs predicted values
+    print(f"{ticker} - Actual Annual Return: {100*annual_metrics_df[f'{ticker}_Annual Return'].mean()}%, Predicted Annual Return: {100*future_return[0]}%")
+    print(f"{ticker} - Actual Annual Risk: {100*annual_metrics_df[f'{ticker}_Annual Risk'].mean()}%, Predicted Annual Risk: {100*future_risk[0]}%")
+    axs[1].bar(index[i] - bar_width/2, annual_metrics_df[f'{ticker}_Annual Risk'].mean(), bar_width, alpha=opacity, color='blue', label='Actual Risk' if i == 0 else "")
+    axs[1].bar(index[i] + bar_width/2, predicted_risk_df.loc[ticker, 'Predicted Risk'], bar_width, alpha=opacity, color='orange', label='Predicted Risk' if i == 0 else "")
+axs[1].set_title('Actual vs Predicted Annual Risk')
+axs[1].set_xticks(index)
+axs[1].set_xticklabels(all_tickers)
+axs[1].legend()
+plt.tight_layout()
+plt.show()
+
+
+predicted_metrics_df = pd.DataFrame(index=all_tickers)
+predicted_metrics_df['Predicted Annual Return'] = predicted_returns_df['Predicted Annual Return']
+predicted_metrics_df['Predicted Risk'] = predicted_risk_df['Predicted Risk']
+
+# Calculate the daily returns for covariance matrix
+daily_returns = pd.DataFrame()
+for ticker in all_tickers:
+    csv_file = f"{ticker}.csv"
+    if os.path.exists(csv_file):
+        data = pd.read_csv(csv_file, parse_dates=['Date'], index_col='Date')
+        daily_returns[ticker] = data['Adj Close'].pct_change()
+
+
+# Calculate the covariance matrix for the tickers
+cov_matrix = daily_returns.cov() * 252  # Annualize the covariance matrix
+
+# Define the objective function for MPT (Maximize Sharpe Ratio)
 def objective(weights):
-    portfolio_return = np.dot(weights, predicted_metrics_df['Annualized Return (%)'])
-    portfolio_volatility = np.dot(weights, predicted_metrics_df['Risk (%)'])
-    return -portfolio_return / portfolio_volatility  # We negate because we want to maximize
+    portfolio_return = np.dot(weights, predicted_metrics_df['Predicted Annual Return'])
+    portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    return -portfolio_return / portfolio_volatility
 
-# Define the constraint for risk
-def risk_constraint(weights): #Check this function
-    portfolio_volatility = np.dot(weights, predicted_metrics_df['Risk (%)'])
-    return max_risk - portfolio_volatility  # Ensuring the portfolio risk does not exceed max_risk
+# Bounds for each weight to be between 0 and 1
+bounds = tuple((0, 1) for _ in predicted_metrics_df.index)
 
-# Define the constraint to ensure no single asset weight is above max investment%
-def single_asset_constraint(weights):
-    return max_investment - max(weights)
-
-# Initialize weights equally
+# Initial weights
 initial_weights = np.array([1. / len(predicted_metrics_df)] * len(predicted_metrics_df))
 
-# Define the constraints and bounds
-constraints = (
-    {'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1},  # The sum of weights is 1
-    {'type': 'ineq', 'fun': risk_constraint},  # The portfolio risk does not exceed max_risk
-    {'type': 'ineq', 'fun': single_asset_constraint}  # No single asset weight is above 20%
-)
+# Constraints
+def risk_constraint(weights):
+    portfolio_risk = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    return max_risk - portfolio_risk
 
-# Define the bounds for each weight to be between 0 and 1
-bounds = tuple((0, 1) for _ in range(len(predicted_metrics_df)))
+def max_investment_constraint(weights):
+    return max_investment - max(weights)
+
+# Add these constraints to the existing constraints tuple
+constraints = (
+    {'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1},
+    {'type': 'ineq', 'fun': risk_constraint},
+    {'type': 'ineq', 'fun': max_investment_constraint}
+)
 
 # Perform the optimization
 solution = minimize(
@@ -153,14 +176,36 @@ if not solution.success:
 optimal_weights = solution.x
 
 # Calculate the expected portfolio return and risk using the optimal weights
-expected_return = np.dot(optimal_weights, predicted_metrics_df['Annualized Return (%)'])
-expected_risk = np.dot(optimal_weights, predicted_metrics_df['Risk (%)'])
+expected_return = 100 * np.dot(optimal_weights, predicted_metrics_df['Predicted Annual Return'])
+expected_risk = 100 * np.sqrt(np.dot(optimal_weights.T, np.dot(cov_matrix, optimal_weights)))
 
 # Print the expected portfolio return and risk
 print(f"Expected Portfolio Return: {expected_return:.2f}%")
 print(f"Expected Portfolio Risk: {expected_risk:.2f}%")
 print("Optimal Portfolio Composition:")
 for i, ticker in enumerate(predicted_metrics_df.index):
-    full_name = ticker_to_name.get(ticker, ticker)
     weight = optimal_weights[i] * 100  # Convert to percentage
-    print(f"Invest {weight:.2f}% of funds in {full_name}")
+    print(f"Invest {weight:.2f}% of funds in {ticker}")
+    
+# Plotting individual stocks/bonds
+plt.figure(figsize=(10, 6))
+for ticker in predicted_metrics_df.index:
+    plt.scatter(predicted_metrics_df.loc[ticker, 'Predicted Risk'] * np.sqrt(252),  # Annualized Risk
+                predicted_metrics_df.loc[ticker, 'Predicted Annual Return'] * 100,  # Annualized Return
+                label=ticker)
+
+# Plotting the optimized portfolio
+plt.scatter(expected_risk, expected_return, color='red', marker='*', s=150, label='Optimized Portfolio')
+
+# Adding a vertical line for maximum risk
+plt.axvline(x=max_risk, color='red', linestyle='--', label='Max Risk Threshold')
+
+# Enhancements
+plt.title('Risk-Return Plot')
+plt.xlabel('Volatility (Standard Deviation)')
+plt.ylabel('Expected Annual Return(%)')
+plt.legend(loc='best')
+plt.grid(True)
+
+# Show the plot
+plt.show()
