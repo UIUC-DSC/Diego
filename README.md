@@ -34,6 +34,7 @@ Rate of Return:
 Risk:
 <img width="684" alt="Screenshot 2023-11-30 104551" src="https://github.com/UIUC-DSC/Diego/assets/134166232/572e74d1-6e90-43ce-9d5f-7ab549468036">
 
+<img width="684" alt="Screenshot 2023-11-30 104551" src="https://github.com/UIUC-DSC/Diego/assets/134166232/724630b7-91c2-486b-a5de-8612e9f25576">
 
 
 ## Final Comments:
