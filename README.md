@@ -28,11 +28,11 @@ PRESENTATION: https://docs.google.com/presentation/d/1fYfy8J9Yi-Vw2jI0SYlqxFTbSf
 
 ## VISUALS
 ### Results of our ML Model:
-#### Rate of Return:
 <img width="686" alt="Screenshot 2023-11-30 104413" src="https://github.com/UIUC-DSC/Diego/assets/134166232/8184f9a4-cf9a-426d-bb1a-37fc87ad0990">
-
-#### Risk:
 <img width="684" alt="Screenshot 2023-11-30 104551" src="https://github.com/UIUC-DSC/Diego/assets/134166232/572e74d1-6e90-43ce-9d5f-7ab549468036">
+
+### Portfolio Comparison:
+<img width="518" alt="Screenshot 2023-11-30 104847" src="https://github.com/UIUC-DSC/Diego/assets/134166232/c7cdca14-a562-4568-9050-111286e3257b">
 
 ## Final Comments:
 We were in the process of creating a frontend but had difficulty integrating it. We may revisit this project for the integration
