@@ -28,7 +28,7 @@ PRESENTATION: https://docs.google.com/presentation/d/1fYfy8J9Yi-Vw2jI0SYlqxFTbSf
 
 ## VISUALS
 
-Results of our ML Model:
+### Results of our ML Model:
 Rate of Return:
 <img width="686" alt="Screenshot 2023-11-30 104413" src="https://github.com/UIUC-DSC/Diego/assets/134166232/8184f9a4-cf9a-426d-bb1a-37fc87ad0990">
 Risk:
