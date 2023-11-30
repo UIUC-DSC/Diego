@@ -1,5 +1,6 @@
 # Portfolio Optimization Project
 
+## About Us:
 Creators: Greg Peng, Diego Marquez, Jackson Song, Will McKinnon, Mac Prom. 
 
 Created in University of Illinois Data Science Club, NOV 29 2023.
