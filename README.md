@@ -27,11 +27,11 @@ PRESENTATION: https://docs.google.com/presentation/d/1fYfy8J9Yi-Vw2jI0SYlqxFTbSf
 3. Run the code and adjust the max_investment and max_risk parameters
 
 ## VISUALS
-
 ### Results of our ML Model:
-Rate of Return:
+#### Rate of Return:
 <img width="686" alt="Screenshot 2023-11-30 104413" src="https://github.com/UIUC-DSC/Diego/assets/134166232/8184f9a4-cf9a-426d-bb1a-37fc87ad0990">
-Risk:
+
+#### Risk:
 <img width="684" alt="Screenshot 2023-11-30 104551" src="https://github.com/UIUC-DSC/Diego/assets/134166232/572e74d1-6e90-43ce-9d5f-7ab549468036">
 
 ## Final Comments:
