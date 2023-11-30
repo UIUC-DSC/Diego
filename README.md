@@ -1,6 +1,6 @@
 # Portfolio Optimization Project
 
-Creators: Greg Peng, Diego Marquez, Jackson Song, Will McKinnon, Mac Prom
+Creators: Greg Peng, Diego Marquez, Jackson Song, Will McKinnon, Mac Prom.
 Created in University of Illinois Data Science Club, NOV 29 2023.
 
 ## PURPOSE: To give a client a stock portfolio with the HIGHEST rate of return given their MAXIMUM risk and maximum investment percentage in a stock they want to commit.
